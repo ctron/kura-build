@@ -1,0 +1,61 @@
+#!/bin/bash
+
+REPO=${REPO:-https://github.com/eclipse/kura}
+BRANCH=${BRANCH:-develop}
+
+set -e
+
+die() { echo "$@" 1>&2 ; exit 1; }
+usage() { echo "Usage: $0 [-r <repo>|-g <repo-url>] [-b <branch>] [-- <build args>]" 1>&2; exit 1; }
+
+while getopts ":r:g:b:" o; do
+	case "${o}" in
+		r)
+			REPO=https://github.com/${OPTARG}
+			;;
+		r)
+			REPO=${OPTARG}
+			;;
+		b)
+			BRANCH=${OPTARG}
+			;;
+		*)
+			usage
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+test "$1" = "--" && shift
+
+# Export to path, kura only looks for "mvn"
+
+test -n "$MAVEN_HOME" && export PATH=$PATH:$MAVEN_HOME/bin
+
+# use local repo, when running on host
+M2_LOCAL_REPO="$(dirname "$0")/m2.repo"
+
+echo     Repository: $REPO
+echo         Branch: $BRANCH
+echo     Build args: $@
+
+# Clone
+
+rm -Rf kura-build-all
+git clone "$REPO" -b "$BRANCH" kura-build-all
+
+# Run the main build
+
+cd kura-build-all
+./build-all.sh -Pspeedup "-Dmaven.repo.local=$M2_LOCAL_REPO" "$@"
+
+# only copy output when we find the target output folder
+
+if [ -d /output ]; then
+	DATE=$(date +%Y%m%d-%H%M%S)
+	TARGET="/output/$DATE"
+	mkdir -p "$TARGET"
+	rsync -a kura/distrib/target/ --include-from=/output-includes --exclude="*" "$TARGET/"
+	echo "The output of the build is located in the sub-directory '$DATE' in the mapped output folder."
+fi
+

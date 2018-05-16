@@ -1,0 +1,3 @@
+*.rpm
+*.deb
+kura_*.sh
